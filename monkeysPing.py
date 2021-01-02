@@ -12,6 +12,9 @@ guildId = int(os.getenv("GUILD_ID"))
 roleId = int(os.getenv("ROLE_ID"))
 channelId = int(os.getenv("CHANNEL_ID"))
 
+streamer = os.getenv("STREAMER")
+delay = int(os.getenv("CHECK_DELAY"))
+
 # init discord client and twitch connection
 client = discord.Client()
 helix_api = twitch.Helix(os.getenv("TWITCH_ID"), os.getenv("TWITCH_SECRET"))
@@ -35,7 +38,7 @@ async def makeRole():
 
 # returns boolean indicating live status
 def isLive():
-    user = helix_api.user(os.getenv("STREAMER"))
+    user = helix_api.user(streamer)
     return user.is_live   
 
 # called once discord client is connected
@@ -62,21 +65,23 @@ async def on_message(message):
 
 # sends ping message
 async def sendPings():
-    message = "https://twitch.tv/" + os.getenv("STREAMER") + " - Stream is now live! "
+    message = "https://twitch.tv/" + streamer + " - Stream is now live! "
     message += role.mention
     await channel.send(message)
 
-# async task that checks if stream live every 30 seconds
+# async task that checks if stream live every <delay> seconds
 # pings if appropriate
 async def checkLiveAndPing():
     global toPing
     while(True):
-        await asyncio.sleep(10)
+        await asyncio.sleep(delay)
         if (isLive()):
             if (toPing):
                 await sendPings()
+                # indicate that pings have already been sent for this stream
                 toPing = False
         else:
+            # stream is ended - next time bot finds him live it should send ping
             toPing = True
         
 # add stream checking/pinging task to client
