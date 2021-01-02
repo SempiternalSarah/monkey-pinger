@@ -13,5 +13,5 @@ Discord bot permission requirements:
 Usage:
     Requires developer keys for both Twitch and Discord. Those, along with the guild (server), channel (to send notification messages), and role IDs, should be entered into a .env file. Add the bot to the server, run the bot, and then it will add/remove the corresponding role to users who use the !pingme and !pingmenot commands respectively. It will also check every 10 seconds (by default - can be easily changed) if the streamer has gone live. If so, it will ping the role.
 
-Note that if you leave the role ID blank, the bot will create a new role (called Goobers) and print the role ID to std out. This ID should then be entered into the .env file to allow the bot to use the same role on future startups.
+Note that if you leave the role ID blank, the bot will create a new role (called Goobers) and print the role ID to std out. This ID should then be (manually) entered into the .env file to allow the bot to use the same role on future startups.
 
