@@ -21,7 +21,8 @@ role = None
 channel = None
 
 # to ping if stream live - false if already pinged
-toPing = True
+# set to true when sees that stream is offline
+toPing = False
 
 # creates the Goobers role (to be pinged)
 # only called if the role ID in the config file doesn't exist
