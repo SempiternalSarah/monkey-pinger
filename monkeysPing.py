@@ -24,6 +24,7 @@ channel = None
 # to ping if stream live - false if already pinged
 # set to true when bot sees that stream is offline
 toPing = False
+
 # creates the Goobers role (to be pinged)
 # only called if the role ID in the config file doesn't exist
 async def makeRole():
@@ -34,7 +35,7 @@ async def makeRole():
 
 # returns boolean indicating live status
 def isLive():
-    user = helix_api.user('monkeys_forever')
+    user = helix_api.user(os.getenv("STREAMER"))
     return user.is_live   
 
 # called once discord client is connected
@@ -61,7 +62,7 @@ async def on_message(message):
 
 # sends ping message
 async def sendPings():
-    message = "https://twitch.tv/monkeys_forever - Stream is now live! "
+    message = "https://twitch.tv/" + os.getenv("STREAMER") + " - Stream is now live! "
     message += role.mention
     await channel.send(message)
 
