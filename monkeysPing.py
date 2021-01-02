@@ -1,17 +1,20 @@
 import twitch
 import discord
 import asyncio
+import dotenv
+import os
 
-# read in IDs from config file
-cfg = open("pingConfig.txt", "r")
-guildId = int(cfg.readline())
-roleId = int(cfg.readline())
-channelId = int(cfg.readline())
-cfg.close()
+# load environment file
+dotenv.load_dotenv(override=True)
+
+# load IDs from environment variables
+guildId = int(os.getenv("GUILD_ID"))
+roleId = int(os.getenv("ROLE_ID"))
+channelId = int(os.getenv("CHANNEL_ID"))
 
 # init discord client and twitch connection
 client = discord.Client()
-helix_api = twitch.Helix('62cznd1um7tlasc70jv2nnxjcjuchi', 'kjakm3beprsnb5kgec38ngmr0wyxdk')
+helix_api = twitch.Helix(os.getenv("TWITCH_ID"), os.getenv("TWITCH_SECRET"))
 
 # global variables
 guild = None
@@ -28,11 +31,7 @@ async def makeRole():
     global role
     role = await guild.create_role(name="Goobers", mentionable=True)
     roleId = role.id
-    cfg = open("pingConfig.txt", "w")
-    cfg.write("%i\n" % guildId)
-    cfg.write("%i\n" % roleId)
-    cfg.write("%i\n" % channelId)
-    cfg.close()
+    print(roleId)
 
 # returns boolean indicating live status
 def isLive():
@@ -79,5 +78,5 @@ async def checkLiveAndPing():
 # add stream checking/pinging task to client
 client.loop.create_task(checkLiveAndPing())
 # hand control over to the client
-client.run('Nzk0NzQzODM4MzQxNzI2MjM5.X-_Q4A.MWXjRMNrtq9MjF0FoAb0Wpgf2e0')
+client.run(os.getenv("DISCORD_TOKEN"))
 
