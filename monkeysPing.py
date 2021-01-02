@@ -24,7 +24,6 @@ channel = None
 # to ping if stream live - false if already pinged
 # set to true when bot sees that stream is offline
 toPing = False
-
 # creates the Goobers role (to be pinged)
 # only called if the role ID in the config file doesn't exist
 async def makeRole():
@@ -42,6 +41,8 @@ def isLive():
 @client.event
 async def on_ready():
     global guild, role, channel
+    game = discord.Game("!pingme to be added, !pingmenot to be removed")
+    await client.change_presence(activity=game, status=discord.Status.online)
     # store guild, role, and channel information
     guild = client.get_guild(guildId)
     role = guild.get_role(roleId)
