@@ -32,7 +32,7 @@ toPing = False
 # only called if the role ID in the config file doesn't exist
 async def makeRole():
     global role
-    role = await guild.create_role(name="Goobers", mentionable=True)
+    role = await guild.create_role(name=os.getenv("ROLE_NAME"), mentionable=True)
     roleId = role.id
     print(roleId)
 
