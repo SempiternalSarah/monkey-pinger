@@ -42,9 +42,11 @@ def isLive():
 @client.event
 async def on_ready():
     global guild, role, channel
+    # store guild, role, and channel information
     guild = client.get_guild(guildId)
     role = guild.get_role(roleId)
     channel = client.get_channel(channelId)
+    # if role not found - create one
     if (role == None):
         await makeRole()
 
