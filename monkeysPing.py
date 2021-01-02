@@ -1,8 +1,6 @@
 import twitch
 import discord
-import time
 import asyncio
-import string
 
 # read in IDs from config file
 cfg = open("pingConfig.txt", "r")
@@ -21,7 +19,7 @@ role = None
 channel = None
 
 # to ping if stream live - false if already pinged
-# set to true when sees that stream is offline
+# set to true when bot sees that stream is offline
 toPing = False
 
 # creates the Goobers role (to be pinged)
