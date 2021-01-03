@@ -102,6 +102,7 @@ def authAndRegisterTwitch():
     }
     header = {"Content-Type":"application/json", "Client-ID": twitchId, 'Authorization' : 'Bearer ' + resp['access_token']}
 
+    # send notification registration request
     req = requests.post(webhookurl, headers=header, json = payload)
 
 # creates the Goobers role (to be pinged)
