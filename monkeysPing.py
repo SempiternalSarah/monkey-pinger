@@ -67,6 +67,10 @@ twitchSecret = os.getenv("TWITCH_SECRET")
 # port
 port = os.getenv("TTV_PORT")
 
+# start listening
+app = tornado.web.Application([(r"/", listener)])
+app.listen(int(port))
+
 # init discord client and twitch connection
 client = discord.Client()
 helix_api = twitch.Helix(twitchId, twitchSecret)
@@ -157,10 +161,6 @@ async def registerDaily():
         authAndRegisterTwitch()
         # sleep for 24 hours before registering again
         await asyncio.sleep(86400)
-
-# start listening
-app = tornado.web.Application([(r"/", listener)])
-app.listen(port)
         
 # add daily registration task to client
 client.loop.create_task(registerDaily())
