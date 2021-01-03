@@ -2,7 +2,7 @@ Bot created to ping users in Discord when the streamer goes live.
 
 Requirements: 
     Twitch Python (pip install twitch-python)
-    Twitch Discord (pip install discord.py)
+    Discord Python (pip install discord.py)
     Python dotenv (pip install python-dotenv)
     Tornado (pip install tornado)
     Requests (pip install requests)
