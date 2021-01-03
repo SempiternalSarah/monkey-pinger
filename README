@@ -13,7 +13,8 @@ Discord bot permission requirements:
     Send Messages
 
 Usage:
-    Requires developer keys for both Twitch and Discord. Those, along with the guild (server), channel (to send notification messages), and role IDs, should be entered into a .env file. Add the bot to the server, run the bot, and then it will add/remove the corresponding role to users who use the !pingme and !pingmenot commands respectively. It will also register with Twitch webhooks to receive notifications when the streamer goes live. If so, it will ping the role.
+    Requires developer keys for both Twitch and Discord. Those, along with the guild (server), channel (to send notification messages), and role IDs, should be entered into a .env file (create with `cp .env.example .env`). Add the bot to the server, run the bot, and then it will add/remove the corresponding role to users who use the !pingme and !pingmenot commands respectively. It will also register with Twitch webhooks to receive notifications when the streamer goes live. If so, it will ping the role.
+    
 
 Note that if you leave the role ID blank, the bot will create a new role (called Goobers) and log the role ID. This ID should then be (manually) entered into the .env file to allow the bot to use the same role on future startups.
 
