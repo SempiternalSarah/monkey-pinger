@@ -117,11 +117,6 @@ async def makeRole():
     roleId = role.id
     logging.info("CREATED ROLE: " + str(roleId))
 
-# returns boolean indicating live status
-def isLive():
-    user = helix_api.user(streamer)
-    return user.is_live   
-
 # called once discord client is connected
 @client.event
 async def on_ready():
