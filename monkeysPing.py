@@ -3,6 +3,20 @@ import discord
 import asyncio
 import dotenv
 import os
+import web
+
+class listener:
+    def POST(self):
+        data = web.data
+        return 'OK'
+    def GET(self):
+        return "ASDFASDF"
+
+urls = ('/', 'listener')
+
+app = web.application(urls, globals())
+
+app.run()
 
 # load environment file
 dotenv.load_dotenv(override=True)
@@ -72,20 +86,22 @@ async def sendPings():
 # async task that checks if stream live every <delay> seconds
 # pings if appropriate
 async def checkLiveAndPing():
-    global toPing
-    while(True):
-        await asyncio.sleep(delay)
-        if (isLive()):
-            if (toPing):
-                await sendPings()
-                # indicate that pings have already been sent for this stream
-                toPing = False
-        else:
-            # stream is ended - next time bot finds him live it should send ping
-            toPing = True
+    app.run()
+    # global toPing
+    # while(True):
+    #     await asyncio.sleep(delay)
+    #     if (isLive()):
+    #         if (toPing):
+    #             await sendPings()
+    #             # indicate that pings have already been sent for this stream
+    #             toPing = False
+    #     else:
+    #         # stream is ended - next time bot finds him live it should send ping
+    #         toPing = True
         
 # add stream checking/pinging task to client
-client.loop.create_task(checkLiveAndPing())
-# hand control over to the client
-client.run(os.getenv("DISCORD_TOKEN"))
+
+# client.loop.create_task(checkLiveAndPing())
+# # hand control over to the client
+# client.run(os.getenv("DISCORD_TOKEN"))
 
