@@ -15,7 +15,6 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-
 # notification ID last received - to ignore duplicates
 lastNotification = 0
 
@@ -42,17 +41,13 @@ class listener(tornado.web.RequestHandler):
             logging.info("live notification")
             # send pings
             await sendPings()
-            
+
     # get requests - should only see when registering
     def get(self):
         # extract challenge code to send in response
         confirm = self.get_argument('hub.challenge')
         logging.info("Successfully registered")
         self.write(confirm)
-
-# start listening
-app = tornado.web.Application([(r"/", listener)])
-app.listen(8080)
 
 # load environment file
 dotenv.load_dotenv(override=True)
@@ -62,10 +57,15 @@ guildId = int(os.getenv("GUILD_ID"))
 roleId = int(os.getenv("ROLE_ID"))
 channelId = int(os.getenv("CHANNEL_ID"))
 
+# streamer name
 streamer = os.getenv("STREAMER")
 
+# twitch dev details
 twitchId = os.getenv("TWITCH_ID")
 twitchSecret = os.getenv("TWITCH_SECRET")
+
+# port
+port = os.getenv("TTV_PORT")
 
 # init discord client and twitch connection
 client = discord.Client()
@@ -97,7 +97,7 @@ def authAndRegisterTwitch():
     webhookurl = "https://api.twitch.tv/helix/webhooks/hub"
     payload = {"hub.mode":"subscribe",
         "hub.topic":"https://api.twitch.tv/helix/streams?user_id=" + user.id,
-        "hub.callback": "http://" + ip + ":8080",
+        "hub.callback": "http://" + ip + port,
         "hub.lease_seconds": 90000
     }
     header = {"Content-Type":"application/json", "Client-ID": twitchId, 'Authorization' : 'Bearer ' + resp['access_token']}
@@ -156,6 +156,10 @@ async def registerDaily():
         authAndRegisterTwitch()
         # sleep for 24 hours before registering again
         await asyncio.sleep(86400)
+
+# start listening
+app = tornado.web.Application([(r"/", listener)])
+app.listen(port)
         
 # add daily registration task to client
 client.loop.create_task(registerDaily())
