@@ -52,13 +52,14 @@ class listener(tornado.web.RequestHandler):
         if (body and body['data'] and body['data'][0]['type'] == "live"):
             logging.info("live notification")
             userId = body['data'][0]['user_id']
+            streamId = body['data'][0]['id']
             # check if already seen this stream id
             # indicates title change, etc
-            if (lastLive[userId] == body['data'][0]['id']):
+            if (db.getLastStreamId(userId) == str(streamId)):
                 logging.info("stream update - not new live")
                 return
             # mark this as last stream seen live
-            lastLive[userId] = body['data'][0]['id']
+            db.setLastStreamId(userId, streamId)
             # send pings
             await sendPings(db.getStreamerSubs(userId))
 

@@ -52,5 +52,17 @@ class DatabaseManager:
             cursor.execute(query)
             result = cursor.fetchone()
             return result[0]
-            
+
+    def getLastStreamId(self, streamerId):
+        query = "SELECT streamId FROM lastLive WHERE streamerId = %s" % str(streamerId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.fethone()
+            return result[0]
+
+    def setLastStreamId(self, streamerId, streamId):
+        query = "UPDATE lastLive SET streamId = %s WHERE streamerId = %s" % (str(streamId), str(streamerId))
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()
 
