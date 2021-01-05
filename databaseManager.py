@@ -12,7 +12,7 @@ class DatabaseManager:
         database="discordtwitchbot")
 
     def getStreamerSubs(self, streamerId):
-        query = "SELECT channelId, guildId, roleId, message FROM discordTwitchSubscriptions WHERE streamerId = " + str(streamerId)
+        query = "SELECT guildId, channelId, roleId, message FROM discordTwitchSubscriptions WHERE streamerId = " + str(streamerId)
         toReturn = []
         with self.connection.cursor() as cursor:
             cursor.execute(query)
@@ -23,7 +23,34 @@ class DatabaseManager:
 
     def addStreamerSub(self, sub):
         query = "INSERT INTO discordTwitchSubscriptions (streamerId, guildId, channelId, roleId, message) VALUES (%i, %i, %i, %i, \"%s\")" % (sub.streamerId, sub.guildId, sub.channelId, sub.roleId, sub.message)
-        print(query)
         with self.connection.cursor() as cursor:
             cursor.execute(query)
             self.connection.commit()
+
+    def getAllStreamers(self):
+        query = "SELECT DISTINCT streamerId FROM discordTwitchSubscriptions"
+        toReturn = []
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            for streamer in cursor.fetchall():
+                toReturn.append(streamer[0])
+            self.connection.commit()
+        return toReturn
+
+    def findSubscription(self, streamerId, guildId):
+        query = "SELECT channelId, roleId FROM discordTwitchSubscriptions WHERE streamerId = %s AND guildId = %s" % (streamerId, guildId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.fetchall()
+            if result:
+                return result[0]
+            return None
+
+    def streamerExists(self, streamerId):
+        query = "SELECT COUNT(1) FROM discordTwitchSubscriptions WHERE streamerId = %s" % str(streamerId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.fetchone()
+            return result[0]
+            
+
