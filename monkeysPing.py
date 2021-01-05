@@ -1,12 +1,17 @@
+import dotenv
 import twitch
 import discord
 import asyncio
-import dotenv
 import os
 import tornado.web
 import tornado
 import requests
 import logging
+from databaseManager import DatabaseManager
+from models.discordTwitchSubscription import DiscordTwitchSubscription
+
+# load environment file
+dotenv.load_dotenv(override=True)
 
 # setup logging
 logging.basicConfig(
@@ -14,6 +19,10 @@ logging.basicConfig(
     level = logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
+# connect to database
+
+db = DatabaseManager()
 
 # notification ID last received - to ignore duplicates
 lastNotification = 0
@@ -40,7 +49,7 @@ class listener(tornado.web.RequestHandler):
         if (body and body['data'] and body['data'][0]['type'] == "live"):
             logging.info("live notification")
             # send pings
-            await sendPings()
+            await sendPings(db.getStreamerSubs(body['data'][0]['id']))
 
     # get requests - should only see when registering
     def get(self):
@@ -48,14 +57,6 @@ class listener(tornado.web.RequestHandler):
         confirm = self.get_argument('hub.challenge')
         logging.info("Successfully registered")
         self.write(confirm)
-
-# load environment file
-dotenv.load_dotenv(override=True)
-
-# load IDs from environment variables
-guildId = int(os.getenv("GUILD_ID"))
-roleId = int(os.getenv("ROLE_ID"))
-channelId = int(os.getenv("CHANNEL_ID"))
 
 # streamer name
 streamer = os.getenv("STREAMER")
@@ -66,6 +67,12 @@ twitchSecret = os.getenv("TWITCH_SECRET")
 
 # port
 port = os.getenv("TTV_PORT")
+
+# default live message
+defaultMessage = os.getenv("DEFAULT_LIVE_MESSAGE")
+
+# global admin discord ID
+admin = os.getenv("GLOBAL_ADMIN_ID")
 
 # start listening
 app = tornado.web.Application([(r"/", listener)])
@@ -109,28 +116,12 @@ def authAndRegisterTwitch():
     # send notification registration request
     req = requests.post(webhookurl, headers=header, json = payload)
 
-# creates the Goobers role (to be pinged)
-# only called if the role ID in the config file doesn't exist
-async def makeRole():
-    global role
-    role = await guild.create_role(name=os.getenv("ROLE_NAME"), mentionable=True)
-    roleId = role.id
-    logging.info("CREATED ROLE: " + str(roleId))
-
 # called once discord client is connected
 @client.event
 async def on_ready():
     logging.info("Discord client connected")
-    global guild, role, channel
     game = discord.Game("!pingme to be added, !pingmenot to be removed")
     await client.change_presence(activity=game, status=discord.Status.online)
-    # store guild, role, and channel information
-    guild = client.get_guild(guildId)
-    role = guild.get_role(roleId)
-    channel = client.get_channel(channelId)
-    # if role not found - create one
-    if (role == None):
-        await makeRole()
 
 # called every message - only reacts to the commands
 @client.event
@@ -141,12 +132,38 @@ async def on_message(message):
     elif message.content == '!pingmenot':
         logging.info("Removing role from user " + str(message.author.id))
         await message.author.remove_roles(role)
+    elif message.content.startswith("!subscribe"):
+        logging.info("Adding subscription: " + message.content)
+        fields = message.content.split()
+        user = helix_api.user(fields[1])
+        if (user):
+            uid = user.id
+        else:
+            await message.channel.send("Twitch streamer %s not found" % fields[1])
+            return
 
-# sends ping message
-async def sendPings():
-    message = "https://twitch.tv/" + streamer + " - Stream is now live! "
-    message += role.mention
-    await channel.send(message)
+        if len(fields) >= 3:
+            newRole = discord.utils.get(message.guild.roles, id=fields[2])
+            if not newRole:
+                newRole = discord.utils.get(message.guild.roles, name=fields[2])
+            else:
+                newRole = await message.guild.create_role(name=fields[2], mentionable=True)
+        else:   
+            newRole = await message.guild.create_role(name=user.display_name+" pings", mentionable=True)
+        
+        db.addStreamerSub(DiscordTwitchSubscription(user.id, message.guild.id, message.channel.id, newRole.id, defaultMessage))
+        await message.author.add_roles(newRole)
+
+# sends ping message to each sub group
+async def sendPings(subs: list[DiscordTwitchSubscription]):
+    # all will be about the same streamer
+    streamer = helix_api.user(subs[0].streamerId)
+    for sub in subs:
+        guild = client.get_guild(sub.guildId)
+        role = guild.get_role(sub.roleId)
+        message = sub.message.replace("$link", "https://twitch.tv/" + streamer.display_name)
+        message = message.replace("$role", role.mention)
+        await channel.send(message)
 
 # job added to the discord client's event loop
 # registers for twitch webhook notifications every 24 hours

@@ -1,0 +1,7 @@
+[DEFAULT]
+database = mysql://user:password@localhost/discordtwitchbot
+sources = ./migrations
+migration_table = _yoyo_migration
+batch_mode = off
+verbosity = 0
+
