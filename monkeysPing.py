@@ -160,6 +160,9 @@ async def on_message(message):
         else:
             logging.info("Adding role %s to user %s" %(role.name, message.author.name))
             await message.author.add_roles(role)
+    # commands below require admin privileges
+    if message.author.id != admin:
+        return
     # add streamer subscription to the current channel+guild
     elif message.content.startswith("!subscribe"):
         fields = message.content.split()
