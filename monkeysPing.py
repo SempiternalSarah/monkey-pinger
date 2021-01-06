@@ -217,6 +217,9 @@ async def on_message(message):
 
 # sends ping message to each sub group
 async def sendPings(subs: list):
+    # exit if list empty
+    if(len(subs) == 0):
+        return
     # all will be about the same streamer
     streamer = helix_api.user(subs[0].streamerId)
     for sub in subs:
