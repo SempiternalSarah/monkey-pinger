@@ -85,3 +85,12 @@ class DatabaseManager:
         with self.connection.cursor() as cursor:
             cursor.execute(query)
             self.connection.commit()
+
+    def getAllSubscriptions(self, guildId):
+        query = "SELECT streamerId FROM discordTwitchSubscriptions WHERE guildId = %s" % (guildId)
+        toReturn = []
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            for streamer in cursor.fetchall():
+                toReturn.append(streamer)
+            return toReturn

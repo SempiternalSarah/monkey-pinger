@@ -158,7 +158,7 @@ async def on_ready():
     app = tornado.web.Application([(r"/", listener)])
     app.listen(int(port))
     # set discord bot status
-    game = discord.Game("!pingme monkeys_forever \n !pingmenot monkeys_forever")
+    game = discord.Game("!pingme {streamername} \n !pingmenot {streamername}")
     await client.change_presence(activity=game, status=discord.Status.online)
 
 # called when bot is removed from guild
@@ -171,6 +171,18 @@ async def on_guild_remove(guild):
 # called every message - only reacts to the commands
 @client.event
 async def on_message(message):
+    # show streamers available on the server
+    if message.content.startswith("!streamers"):
+        streamers = db.getAllSubscriptions(message.guild.id)
+        if len(streamers) == 0:
+            await message.channel.send("No stream notifications found on this server")
+            return
+        toSend = "This server has notifications available for the following streamers: ```\n"
+        for streamer in streamers:
+            user = helix_api.user(int(streamer[0]))
+            toSend += "\t - %s\n" % user.display_name
+        toSend += "```"
+        await message.channel.send(toSend)
     # add/remove role from user for a streamer's pings
     if message.content.startswith('!pingme'):
         fields = message.content.split()
