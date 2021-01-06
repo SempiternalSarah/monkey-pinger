@@ -9,6 +9,8 @@ import requests
 import logging
 import databaseManager
 import models.discordTwitchSubscription
+import hmac
+import hashlib
 
 # load environment file
 dotenv.load_dotenv(override=True)
@@ -21,13 +23,23 @@ logging.basicConfig(
 )
 
 # connect to database
-
 db = databaseManager.DatabaseManager()
 
 # webserver class that will receive and handle http requests
 class listener(tornado.web.RequestHandler):
     # post requests - notifications received
     async def post(self):
+        # check signature
+        sig = self.request.headers.get('X-Hub-Signature')
+        if (sig):
+            expectedSig = hmac.new(twitchSecret.encode('utf-8'), msg=self.request.body, digestmod=hashlib.sha256).hexdigest()
+            if ("sha256=" + expectedSig != sig):
+                logging.info("incorrect notification signature!")
+                return
+        else:
+            logging.info("notification unsigned!")
+            return
+
         # convert body to dictionary
         body = tornado.escape.json_decode(self.request.body)
         # check if live notification
@@ -51,6 +63,12 @@ class listener(tornado.web.RequestHandler):
 
     # get requests - should only see when registering
     def get(self):
+        # check that we requested this
+        topic = self.get_argument('hub.topic')
+        if (not topic or topic not in pendingSubs):
+            return
+        # indicate we have received confirmation for this topic
+        pendingSubs.remove(topic)
         # extract challenge code to send in response
         confirm = self.get_argument('hub.challenge')
         logging.info("Successfully registered")
@@ -72,6 +90,7 @@ defaultMessage = os.getenv("DEFAULT_LIVE_MESSAGE")
 # global admin discord ID
 admin = os.getenv("GLOBAL_ADMIN_ID")
 
+# variable for web server
 app = None
 
 # init discord client and twitch connection
@@ -81,6 +100,9 @@ helix_api = twitch.Helix(twitchId, twitchSecret)
 # store twitch token once obtained
 # expires periodically - will be updated in background
 twitchToken = None
+
+# store pending twitch webhook subscriptions
+pendingSubs = []
 
 # checks token with twitch, renews if necessary
 # then registers for notifications for each streamer
@@ -114,9 +136,12 @@ def authAndRegisterTwitch(streamers):
         payload = {"hub.mode":"subscribe",
             "hub.topic":"https://api.twitch.tv/helix/streams?user_id=" + streamer,
             "hub.callback": "http://" + ip + ":" + port,
-            "hub.lease_seconds": 90000
+            "hub.lease_seconds": 90000,
+            "hub.secret": twitchSecret
         }
         header = {"Content-Type":"application/json", "Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
+        # mark we are waiting for confirmation
+        pendingSubs.append(payload['hub.topic'])
 
         # send notification registration request
         req = requests.post(webhookurl, headers=header, json = payload)
@@ -211,6 +236,30 @@ async def on_message(message):
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         req = requests.get(url, headers=header)
         print(req.json())
+
+    elif message.content.startswith("!clearsubs"):
+        url = "https://api.twitch.tv/helix/webhooks/subscriptions"
+        header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
+        subs = requests.get(url, headers=header).json()['data']
+        await clearSubs(subs)
+
+# removes all subscriptions
+async def clearSubs(subs):
+    webhookurl = "https://api.twitch.tv/helix/webhooks/hub"
+    for sub in subs:
+        # register for stream notifications with twitch webhook
+        # lease set for 25 hours - will renew every 24
+        payload = {"hub.mode":"unsubscribe",
+            "hub.topic": sub['topic'],
+            "hub.callback": sub['callback'],
+            "hub.lease_seconds": 0,
+            "hub.secret": twitchSecret
+        }
+        # mark we are waiting for confirmation
+        pendingSubs.append(payload['hub.topic'])
+        # build headers and send request
+        header = {"Content-Type":"application/json", "Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
+        requests.post(webhookurl, headers=header, json=payload)
 
 
 
