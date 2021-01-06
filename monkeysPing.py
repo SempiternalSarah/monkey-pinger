@@ -247,6 +247,9 @@ async def on_message(message):
 async def clearSubs(subs):
     webhookurl = "https://api.twitch.tv/helix/webhooks/hub"
     for sub in subs:
+        # only clear subs from THIS server (port number)
+        if (":"+port not in sub['callback']):
+            return
         # register for stream notifications with twitch webhook
         # lease set for 25 hours - will renew every 24
         payload = {"hub.mode":"unsubscribe",
