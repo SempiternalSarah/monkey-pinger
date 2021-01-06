@@ -180,7 +180,7 @@ async def on_message(message):
         toSend = "This server has notifications available for %i streamer%s: ```\n" % (len(streamers), 's' if len(streamers) > 1 else '')
         users = helix_api.users([int(streamer[0]) for streamer in streamers])
         userNames = [user.display_name for user in users]
-        userNames.sort()
+        userNames.sort(key=str.casefold)
         for user in userNames:
             toSend += "\t - %s\n" % user
         toSend += "```"
