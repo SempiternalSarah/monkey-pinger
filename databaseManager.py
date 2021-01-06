@@ -57,7 +57,7 @@ class DatabaseManager:
         query = "SELECT streamId FROM lastLive WHERE streamerId = %s" % str(streamerId)
         with self.connection.cursor() as cursor:
             cursor.execute(query)
-            result = cursor.fethone()
+            result = cursor.fetchone()
             if result:
                 return result[0]
             return None
@@ -67,4 +67,11 @@ class DatabaseManager:
         with self.connection.cursor() as cursor:
             cursor.execute(query)
             self.connection.commit()
+
+    def addLastStreamId(self, streamerId, streamId):
+        query = "INSERT INTO lastLive (streamerId, streamId) VALUES (%s, %s)" % (str(streamerId), str(streamId))
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()
+
 

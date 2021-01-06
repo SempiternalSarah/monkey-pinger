@@ -24,24 +24,10 @@ logging.basicConfig(
 
 db = databaseManager.DatabaseManager()
 
-# notification ID last received - to ignore duplicates
-lastNotification = 0
-
-# last stream live for each streamer - ignore title change events
-lastLive = {}
-
 # webserver class that will receive and handle http requests
 class listener(tornado.web.RequestHandler):
     # post requests - notifications received
     async def post(self):
-        global lastNotification
-        thisId = self.request.headers.get("Twitch-Notification-Id")
-        # ignore duplicate ID
-        if (thisId == lastNotification):
-            logging.info("Duplicate: " + thisId)
-            self.write("")
-            return
-        lastNotification = thisId
         # convert body to dictionary
         body = tornado.escape.json_decode(self.request.body)
         logging.debug("notification received: " + lastNotification)
@@ -55,11 +41,15 @@ class listener(tornado.web.RequestHandler):
             streamId = body['data'][0]['id']
             # check if already seen this stream id
             # indicates title change, etc
-            if (db.getLastStreamId(userId) == str(streamId)):
-                logging.info("stream update - not new live")
+            lastStream = db.getLastStreamId(userId)
+            if (lastStream == str(streamId)):
+                logging.info("stream update for streamer %s - not new live" % userId)
                 return
             # mark this as last stream seen live
-            db.setLastStreamId(userId, streamId)
+            if (lastStream == None):
+                db.addLastStreamId(userId, streamId)
+            else:
+                db.setLastStreamId(userId, streamId)
             # send pings
             await sendPings(db.getStreamerSubs(userId))
 
@@ -86,9 +76,7 @@ defaultMessage = os.getenv("DEFAULT_LIVE_MESSAGE")
 # global admin discord ID
 admin = os.getenv("GLOBAL_ADMIN_ID")
 
-# start listening
-app = tornado.web.Application([(r"/", listener)])
-app.listen(int(port))
+app = None
 
 # init discord client and twitch connection
 client = discord.Client()
@@ -140,7 +128,12 @@ def authAndRegisterTwitch(streamers):
 # called once discord client is connected
 @client.event
 async def on_ready():
+    global app
     logging.info("Discord client connected")
+    # start listening to twitch API
+    app = tornado.web.Application([(r"/", listener)])
+    app.listen(int(port))
+    # set discord bot status
     game = discord.Game("!pingme to be added, !pingmenot to be removed")
     await client.change_presence(activity=game, status=discord.Status.online)
 
