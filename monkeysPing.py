@@ -30,10 +30,6 @@ class listener(tornado.web.RequestHandler):
     async def post(self):
         # convert body to dictionary
         body = tornado.escape.json_decode(self.request.body)
-        logging.debug("notification received: " + lastNotification)
-        logging.debug(body)
-        # send response
-        self.write("")
         # check if live notification
         if (body and body['data'] and body['data'][0]['type'] == "live"):
             logging.info("live notification")
