@@ -261,7 +261,6 @@ async def on_message(message):
         if len(fields) > 2:
             toDelete = fields[2].lower() == "-d"
         if (toDelete):
-            print(currentSub)
             role = discord.utils.get(message.guild.roles, id=int(currentSub[1]))
             await role.delete()
         db.delSubscription(user.id, message.guild.id)

@@ -35,7 +35,6 @@ class DatabaseManager:
             for streamer in cursor.fetchall():
                 toReturn.append(streamer[0])
             self.connection.commit()
-        print(toReturn)
         return toReturn
 
     def findSubscription(self, streamerId, guildId):
