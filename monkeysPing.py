@@ -130,7 +130,7 @@ async def on_ready():
     app = tornado.web.Application([(r"/", listener)])
     app.listen(int(port))
     # set discord bot status
-    game = discord.Game("!pingme to be added, !pingmenot to be removed")
+    game = discord.Game("!pingme monkeys_forever \n !pingmenot monkeys_forever")
     await client.change_presence(activity=game, status=discord.Status.online)
 
 # called every message - only reacts to the commands
@@ -165,11 +165,11 @@ async def on_message(message):
     if str(message.author.id) != admin:
         return
     # add streamer subscription to the current channel+guild
-    elif message.content.startswith("!subscribe"):
+    elif message.content.startswith("!addnotifs"):
         fields = message.content.split()
         user = helix_api.user(fields[1])
         if (len(fields) == 1):
-            await message.channel.send("Command !subscribe requires a streamer as an argument")
+            await message.channel.send("Command !addnotifs requires a streamer as an argument")
             return
         # no user found matching id/name
         if (not user):
@@ -181,7 +181,7 @@ async def on_message(message):
         currentSub = db.findSubscription(user.id, message.guild.id)
         if (currentSub):
             channel = client.get_channel(int(currentSub[0]))
-            await message.channel.send("Subscription to streamer `%s` already exists in channel %s" % (user.display_name, channel.mention))
+            await message.channel.send("Notifications for streamer `%s` already exist in channel %s" % (user.display_name, channel.mention))
             return
         # 3rd argument is role name/id
         if len(fields) >= 3:
@@ -203,6 +203,8 @@ async def on_message(message):
             authAndRegisterTwitch([user.id])
         # add subscription to database
         db.addStreamerSub(models.discordTwitchSubscription.DiscordTwitchSubscription(user.id, message.guild.id, message.channel.id, newRole.id, defaultMessage))
+        await message.channel.send("Notifications for streamer `%s` added in channel %s for role `%s`" % (user.display_name, message.channel.mention, newRole.name))
+
     elif message.content.startswith("!subs"):
         url = "https://api.twitch.tv/helix/webhooks/subscriptions"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
