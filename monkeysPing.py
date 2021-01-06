@@ -249,7 +249,7 @@ async def clearSubs(subs):
     for sub in subs:
         # only clear subs from THIS server (port number)
         if (":"+port not in sub['callback']):
-            return
+            continue
         # register for stream notifications with twitch webhook
         # lease set for 25 hours - will renew every 24
         payload = {"hub.mode":"unsubscribe",
