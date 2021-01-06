@@ -35,6 +35,7 @@ class DatabaseManager:
             for streamer in cursor.fetchall():
                 toReturn.append(streamer[0])
             self.connection.commit()
+        print(toReturn)
         return toReturn
 
     def findSubscription(self, streamerId, guildId):
@@ -73,5 +74,15 @@ class DatabaseManager:
         with self.connection.cursor() as cursor:
             cursor.execute(query)
             self.connection.commit()
+    
+    def delSubscription(self, streamerId, guildId):
+        query = "DELETE FROM discordTwitchSubscriptions WHERE streamerId = %s AND guildId = %s" % (streamerId, guildId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()
 
-
+    def delAllSubscriptions(self, guildId):
+        query = "DELETE FROM discordTwitchSubscriptions WHERE guildId = %s" % (guildId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()

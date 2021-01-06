@@ -107,6 +107,9 @@ pendingSubs = []
 # checks token with twitch, renews if necessary
 # then registers for notifications for each streamer
 def authAndRegisterTwitch(streamers):
+    # exit if list empty
+    if(len(streamers) == 0):
+        return
     global twitchToken
     # URL to check token
     if (twitchToken != None):
@@ -158,6 +161,13 @@ async def on_ready():
     game = discord.Game("!pingme monkeys_forever \n !pingmenot monkeys_forever")
     await client.change_presence(activity=game, status=discord.Status.online)
 
+# called when bot is removed from guild
+@client.event
+async def on_guild_remove(guild):
+    # remove subscriptions for that guild from the database
+    # no need to manually remove twitch subscriptions - will expire within a day
+    db.delAllSubscriptions(guild.id)
+
 # called every message - only reacts to the commands
 @client.event
 async def on_message(message):
@@ -199,7 +209,7 @@ async def on_message(message):
             return
         # no user found matching id/name
         if (not user):
-            await message.channel.send("Twitch streamer %s not found" % fields[1])
+            await message.channel.send("Twitch streamer `%s` not found" % fields[1])
             return
 
         # check to see if subscription to this streamer already exists in this guild
@@ -230,6 +240,34 @@ async def on_message(message):
         # add subscription to database
         db.addStreamerSub(models.discordTwitchSubscription.DiscordTwitchSubscription(user.id, message.guild.id, message.channel.id, newRole.id, defaultMessage))
         await message.channel.send("Notifications for streamer `%s` added in channel %s for role `%s`" % (user.display_name, message.channel.mention, newRole.name))
+
+    elif message.content.startswith("!removenotifs"):
+        fields = message.content.split()
+        user = helix_api.user(fields[1])
+        if (len(fields) == 1):
+            await message.channel.send("Command !removenotifs requires a streamer as an argument")
+            return
+        # no user found matching id/name
+        if (not user):
+            await message.channel.send("Twitch streamer `%s` not found" % fields[1])
+            return
+        # fetch subscription
+        currentSub = db.findSubscription(user.id, message.guild.id)
+        if (not currentSub):
+            await message.channel.send("No notifications for streamer `%s` found" % user.display_name)
+            return
+        # delete role?
+        toDelete = False
+        if len(fields) > 2:
+            toDelete = fields[2].lower() == "-d"
+        if (toDelete):
+            print(currentSub)
+            role = discord.utils.get(message.guild.roles, id=int(currentSub[1]))
+            await role.delete()
+        db.delSubscription(user.id, message.guild.id)
+        await message.add_reaction("👍")
+
+        
 
     elif message.content.startswith("!subs"):
         url = "https://api.twitch.tv/helix/webhooks/subscriptions"
