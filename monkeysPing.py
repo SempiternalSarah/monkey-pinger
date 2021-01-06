@@ -161,6 +161,7 @@ async def on_message(message):
         else:
             logging.info("Adding role %s to user %s" %(role.name, message.author.name))
             await message.author.add_roles(role)
+        await message.add_reaction("👍")
     # commands below require admin privileges
     if str(message.author.id) != admin:
         return
