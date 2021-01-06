@@ -178,8 +178,8 @@ async def on_message(message):
             await message.channel.send("No stream notifications found on this server")
             return
         toSend = "This server has notifications available for %i streamer%s: ```\n" % (len(streamers), 's' if len(streamers) > 1 else '')
-        for streamer in streamers:
-            user = helix_api.user(int(streamer[0]))
+        users = helix_api.users([int(streamer[0]) for streamer in streamers])
+        for user in users:
             toSend += "\t - %s\n" % user.display_name
         toSend += "```"
         await message.channel.send(toSend)
