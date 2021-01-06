@@ -179,8 +179,10 @@ async def on_message(message):
             return
         toSend = "This server has notifications available for %i streamer%s: ```\n" % (len(streamers), 's' if len(streamers) > 1 else '')
         users = helix_api.users([int(streamer[0]) for streamer in streamers])
-        for user in users:
-            toSend += "\t - %s\n" % user.display_name
+        userNames = [user.display_name for user in users]
+        userNames.sort()
+        for user in userNames:
+            toSend += "\t - %s\n" % user
         toSend += "```"
         await message.channel.send(toSend)
     # add/remove role from user for a streamer's pings
