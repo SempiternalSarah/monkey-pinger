@@ -94,6 +94,9 @@ admin = os.getenv("GLOBAL_ADMIN_ID")
 # variable for web server
 app = tornado.web.Application([(r"/", listener)])
 
+# address for web server
+ip = None
+
 # init discord client and twitch connection
 client = discord.Client()
 helix_api = twitch.Helix(twitchId, twitchSecret)
@@ -111,7 +114,7 @@ def authAndRegisterTwitch(streamers):
     # exit if list empty
     if(len(streamers) == 0):
         return
-    global twitchToken
+    global twitchToken, ip
     # URL to check token
     if (twitchToken != None):
         valurl = "https://id.twitch.tv/oauth2/validate"
@@ -155,8 +158,6 @@ def authAndRegisterTwitch(streamers):
 async def on_ready():
     global app
     logging.info("Discord client connected")
-    # start listening to twitch API
-    app.listen(int(port))
     # set discord bot status
     game = discord.Game("!pingme {streamername} \n !pingmenot {streamername}")
     await client.change_presence(activity=game, status=discord.Status.online)
@@ -286,14 +287,16 @@ async def on_message(message):
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         subs = requests.get(url, headers=header).json()['data']
         userIds = []
+        # parse each subscription and add twitch user ID to the list
         for sub in subs:
-            # only list subs from THIS server (port number)
-            if (":"+port not in sub['callback']):
+            # only list subs from THIS server (address and port number)
+            if (ip not in sub['callback'] or port not in sub['callback']):
                 continue
-            params = urlp.parse_qs(sub['topic'])
             # check that this is a streamer subscription
-            if ('https://api.twitch.tv/helix/streams?user_id' in params):
-                userIds.append(int(params['https://api.twitch.tv/helix/streams?user_id'][0]))
+            if ('https://api.twitch.tv/helix/streams?user_id' in sub['topic']):
+                # parse topic for the user ID
+                idx = sub['topic'].rindex('user_id=') + len('user_id=') 
+                userIds.append(int(sub['topic'][idx:]))
         # get user objects from IDs
         users = helix_api.users(userIds)
         userNames = [user.display_name for user in users]
@@ -316,8 +319,8 @@ async def on_message(message):
 async def clearSubs(subs):
     webhookurl = "https://api.twitch.tv/helix/webhooks/hub"
     for sub in subs:
-        # only clear subs from THIS server (port number)
-        if (":"+port not in sub['callback']):
+        # only clear subs from THIS server (IP and port number)
+        if (ip not in sub['callback'] or port not in sub['callback']):
             continue
         # register for stream notifications with twitch webhook
         # lease set for 25 hours - will renew every 24
@@ -363,6 +366,9 @@ async def registerDaily():
         
 # add daily registration task to client
 client.loop.create_task(registerDaily())
+
+# start listening to twitch API
+app.listen(int(port))
 
 # hand control over to the client
 client.run(os.getenv("DISCORD_TOKEN"))
