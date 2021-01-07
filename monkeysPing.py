@@ -11,6 +11,7 @@ import databaseManager
 import models.discordTwitchSubscription
 import hmac
 import hashlib
+import urllib.parse as urlp
 
 # load environment file
 dotenv.load_dotenv(override=True)
@@ -279,13 +280,31 @@ async def on_message(message):
         db.delSubscription(user.id, message.guild.id)
         await message.add_reaction("👍")
 
-        
-
+    # get ALL twitch streamers for which this instance of the bot gets notifications
     elif message.content.startswith("!subs"):
         url = "https://api.twitch.tv/helix/webhooks/subscriptions"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
-        req = requests.get(url, headers=header)
-        print(req.json())
+        subs = requests.get(url, headers=header).json()['data']
+        userIds = []
+        for sub in subs:
+            # only list subs from THIS server (port number)
+            if (":"+port not in sub['callback']):
+                continue
+            params = urlp.parse_qs(sub['topic'])
+            # check that this is a streamer subscription
+            if ('https://api.twitch.tv/helix/streams?user_id' in params):
+                userIds.append(int(params['https://api.twitch.tv/helix/streams?user_id'][0]))
+        # get user objects from IDs
+        users = helix_api.users(userIds)
+        userNames = [user.display_name for user in users]
+        userNames.sort(key=str.casefold)
+        # build message including names of all streamers
+        toSend = "Bot currently gets notifications for %i streamer%s: ```\n" % (len(userNames), 's' if len(userNames) > 1 else '')
+        for name in userNames:
+            toSend += "\t - %s\n" % name
+        toSend += "```"
+        await message.channel.send(toSend)
+
 
     elif message.content.startswith("!clearsubs"):
         url = "https://api.twitch.tv/helix/webhooks/subscriptions"
