@@ -254,7 +254,7 @@ async def on_message(message):
         # 3rd argument is role name/id
         if len(fields) >= 3:
             # find role by id
-            newRole = discord.utils.get(message.guild.roles, id=fields[2])
+            newRole = discord.utils.get(message.guild.roles, id=int(fields[2]))
             # not valid id - find by name
             if not newRole:
                 newRole = discord.utils.get(message.guild.roles, name=fields[2])
