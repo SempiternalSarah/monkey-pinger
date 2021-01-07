@@ -230,7 +230,7 @@ async def on_message(message):
     # ---------
     # ---------
     
-    # add streamer subscription to the current channel+guild
+    # add streamer notifications to the current channel+guild
     elif message.content.startswith("!addnotifs"):
         if(getPrivilege(message.author, message.channel) < 5):
             return
@@ -273,6 +273,7 @@ async def on_message(message):
         db.addStreamerSub(models.discordTwitchSubscription.DiscordTwitchSubscription(user.id, message.guild.id, message.channel.id, newRole.id, defaultMessage))
         await message.channel.send("Notifications for streamer `%s` added in channel %s for role `%s`" % (user.display_name, message.channel.mention, newRole.name))
 
+    # remove streamer notifications from the guild
     elif message.content.startswith("!removenotifs"):
         if(getPrivilege(message.author, message.channel) < 5):
             return
