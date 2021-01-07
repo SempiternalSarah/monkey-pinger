@@ -91,7 +91,7 @@ defaultMessage = os.getenv("DEFAULT_LIVE_MESSAGE")
 admin = os.getenv("GLOBAL_ADMIN_ID")
 
 # variable for web server
-app = None
+app = tornado.web.Application([(r"/", listener)])
 
 # init discord client and twitch connection
 client = discord.Client()
@@ -155,7 +155,6 @@ async def on_ready():
     global app
     logging.info("Discord client connected")
     # start listening to twitch API
-    app = tornado.web.Application([(r"/", listener)])
     app.listen(int(port))
     # set discord bot status
     game = discord.Game("!pingme {streamername} \n !pingmenot {streamername}")
