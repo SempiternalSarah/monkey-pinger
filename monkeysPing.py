@@ -359,6 +359,7 @@ async def on_message(message):
         if (fields[1] in globalMods):
             await message.channel.send("%s is already a global moderator" % user.name)
             return
+        globalMods.append(fields[1])
         db.addGlobalMod(fields[1])
         await message.add_reaction("👍")
         
