@@ -119,8 +119,10 @@ def authAndRegisterTwitch(streamers):
     if (twitchToken != None):
         valurl = "https://id.twitch.tv/oauth2/validate"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
-        req = requests.get(valurl, headers=header)
-        expiry = req.json()['expires_in']
+        req = requests.get(valurl, headers=header).json()
+        expiry = 0
+        if ('expires_in' in req):
+            expiry = req['expires_in']
         # mark for renewal if expiry less than an hour away
         if (expiry < 3600):
             twitchToken = None
