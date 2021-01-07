@@ -94,3 +94,18 @@ class DatabaseManager:
             for streamer in cursor.fetchall():
                 toReturn.append(streamer)
             return toReturn
+    
+    def getGlobalMods(self):
+        query = "SELECT userId FROM globalMods"
+        toReturn = []
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            for mod in cursor.fetchall():
+                toReturn.append(mod[0])
+            return toReturn
+
+    def addGlobalMod(self, userId):
+        query = "INSERT INTO globalMods (userId) VALUES (%s)" % str(userId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()

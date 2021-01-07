@@ -26,6 +26,9 @@ logging.basicConfig(
 # connect to database
 db = databaseManager.DatabaseManager()
 
+# load global moderators
+globalMods = db.getGlobalMods()
+
 # webserver class that will receive and handle http requests
 class listener(tornado.web.RequestHandler):
     # post requests - notifications received
@@ -87,9 +90,6 @@ port = os.getenv("TTV_PORT")
 
 # default live message
 defaultMessage = os.getenv("DEFAULT_LIVE_MESSAGE")
-
-# global admin discord ID
-admin = os.getenv("GLOBAL_ADMIN_ID")
 
 # variable for web server
 app = tornado.web.Application([(r"/", listener)])
@@ -153,6 +153,15 @@ def authAndRegisterTwitch(streamers):
         # send notification registration request
         req = requests.post(webhookurl, headers=header, json = payload)
 
+# returns privilege level of user
+def getPrivilege(user, channel):
+    if str(user.id) in globalMods:
+        return 9
+    if(user.permissions_in(channel).manage_guild):
+        return 8
+    return 0
+    
+
 # called once discord client is connected
 @client.event
 async def on_ready():
@@ -212,11 +221,19 @@ async def on_message(message):
             logging.info("Adding role %s to user %s" %(role.name, message.author.name))
             await message.author.add_roles(role)
         await message.add_reaction("👍")
-    # commands below require admin privileges
-    if str(message.author.id) != admin:
-        return
+        
+    # ---------
+    # ---------
+
+    # commands below require privileges
+
+    # ---------
+    # ---------
+    
     # add streamer subscription to the current channel+guild
     elif message.content.startswith("!addnotifs"):
+        if(getPrivilege(message.author, message.channel) < 5):
+            return
         fields = message.content.split()
         user = helix_api.user(fields[1])
         if (len(fields) == 1):
@@ -257,11 +274,13 @@ async def on_message(message):
         await message.channel.send("Notifications for streamer `%s` added in channel %s for role `%s`" % (user.display_name, message.channel.mention, newRole.name))
 
     elif message.content.startswith("!removenotifs"):
+        if(getPrivilege(message.author, message.channel) < 5):
+            return
         fields = message.content.split()
-        user = helix_api.user(fields[1])
         if (len(fields) == 1):
             await message.channel.send("Command !removenotifs requires a streamer as an argument")
             return
+        user = helix_api.user(fields[1])
         # no user found matching id/name
         if (not user):
             await message.channel.send("Twitch streamer `%s` not found" % fields[1])
@@ -283,6 +302,8 @@ async def on_message(message):
 
     # get ALL twitch streamers for which this instance of the bot gets notifications
     elif message.content.startswith("!subs"):
+        if(getPrivilege(message.author, message.channel) < 9):
+            return
         url = "https://api.twitch.tv/helix/webhooks/subscriptions"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         subs = requests.get(url, headers=header).json()['data']
@@ -310,10 +331,28 @@ async def on_message(message):
 
 
     elif message.content.startswith("!clearsubs"):
+        if(getPrivilege(message.author, message.channel) < 9):
+            return
         url = "https://api.twitch.tv/helix/webhooks/subscriptions"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         subs = requests.get(url, headers=header).json()['data']
         await clearSubs(subs)
+
+    # add global moderator
+    elif message.content.startswith("!addmod"):
+        if(getPrivilege(message.author, message.channel) < 9):
+            return
+        fields = message.content.split()
+        user = client.get_user(int(fields[1]))
+        if (not user):
+            await message.channel.send("User not found")
+            return
+        if (fields[1] in globalMods):
+            await message.channel.send("%s is already a global moderator" % user.name)
+            return
+        db.addGlobalMod(fields[1])
+        await message.add_reaction("👍")
+        
 
 # removes all subscriptions
 async def clearSubs(subs):
