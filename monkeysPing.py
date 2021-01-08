@@ -401,8 +401,10 @@ async def sendPings(subs: list):
         channel = client.get_channel(sub.channelId)
         # build message text from possible placeholders
         message = sub.message.replace("$link", "https://twitch.tv/" + streamer.display_name)
+        mention = ''
         if (role):
-            message = message.replace("$role", role.mention)
+            mention = role.mention
+        message = message.replace("$role", mention)
         await channel.send(message)
 
 # job added to the discord client's event loop
