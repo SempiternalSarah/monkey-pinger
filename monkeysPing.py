@@ -189,7 +189,7 @@ async def on_message(message):
         if len(streamers) == 0:
             await message.channel.send("No stream notifications found on this server")
             return
-        toSend = "This server has notifications available for %i streamer%s: ```\n" % (len(streamers), 's' if len(streamers) > 1 else '')
+        toSend = "This server has notifications available for %i streamer%s: ```\n" % (len(streamers), '' if len(streamers) == 1 else 's')
         users = helix_api.users([int(streamer[0]) for streamer in streamers])
         userNames = [user.display_name for user in users]
         userNames.sort(key=str.casefold)
@@ -332,7 +332,7 @@ async def on_message(message):
         userNames = [user.display_name for user in users]
         userNames.sort(key=str.casefold)
         # build message including names of all streamers
-        toSend = "Bot currently gets notifications for %i streamer%s: ```\n" % (len(userNames), 's' if len(userNames) > 1 else '')
+        toSend = "Bot currently gets notifications for %i streamer%s: ```\n" % (len(userNames), '' if len(userNames) == 1 else 's')
         for name in userNames:
             toSend += "\t - %s\n" % name
         toSend += "```"
