@@ -3,3 +3,5 @@ __pycache__/
 .env
 yoyo.ini
 log.txt
+host.cert
+host.key
