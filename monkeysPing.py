@@ -13,6 +13,9 @@ import hmac
 import hashlib
 import urllib.parse as urlp
 
+import string
+import random
+
 # load environment file
 dotenv.load_dotenv(override=True)
 
@@ -33,6 +36,7 @@ globalMods = db.getGlobalMods()
 class listener(tornado.web.RequestHandler):
     # post requests - notifications received
     async def post(self):
+        print("RECEIVED!!!!1")
         # check signature
         sig = self.request.headers.get('X-Hub-Signature')
         if (sig):
@@ -67,6 +71,7 @@ class listener(tornado.web.RequestHandler):
 
     # get requests - should only see when registering
     def get(self):
+        print("RECEIVED!!!!1 get")
         # check that we requested this
         topic = self.get_argument('hub.topic')
         if (not topic or topic not in pendingSubs):
@@ -140,17 +145,28 @@ def authAndRegisterTwitch(streamers):
 
     for streamer in streamers:
         # register for stream notifications with twitch webhook
-        # lease set for 25 hours - will renew every 24
-        webhookurl = "https://api.twitch.tv/helix/webhooks/hub"
-        payload = {"hub.mode":"subscribe",
-            "hub.topic":"https://api.twitch.tv/helix/streams?user_id=" + streamer,
-            "hub.callback": "http://" + ip + ":" + port,
-            "hub.lease_seconds": 90000,
-            "hub.secret": twitchSecret
+        # these ones do not expire (check every day just in case?)
+        letters = string.ascii_lowercase.join(string.ascii_uppercase).join(string.digits)
+        subSecret = ''.join(random.choice(letters for i in range(20)))
+        print(subSecret)
+        webhookurl = "https://api.twitch.tv/helix/eventsub/subscriptions"
+        payload = {
+            "type": "stream.live",
+            "version": "1",
+            "condition": {
+                "broadcaster_user_id": "12826"
+            },
+            "transport": {
+                "method": "webhook",
+                "callback": ip,
+                "secret": secret,
+            }
         }
+
         header = {"Content-Type":"application/json", "Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
-        # mark we are waiting for confirmation
-        pendingSubs.append(payload['hub.topic'])
+
+        # save payload pending confirmation from Twitch
+        pendingSubs.append(payload)
 
         # send notification registration request
         req = requests.post(webhookurl, headers=header, json = payload)
@@ -319,6 +335,7 @@ async def on_message(message):
         userIds = []
         # parse each subscription and add twitch user ID to the list
         for sub in subs:
+            print(sub)
             # only list subs from THIS server (address and port number)
             if (ip not in sub['callback'] or port not in sub['callback']):
                 continue
@@ -420,7 +437,7 @@ async def registerDaily():
 client.loop.create_task(registerDaily())
 
 # start listening to twitch API
-app.listen(int(port))
+app.listen(int(port), ssl_options={'certfile': 'host.cert', 'keyfile': 'host.key'})
 
 # hand control over to the client
 client.run(os.getenv("DISCORD_TOKEN"))
