@@ -85,7 +85,7 @@ class listener(tornado.web.RequestHandler):
                 secret = db.findActiveSubscription(userId)[2]
                 # check signature
                 if (checkSig(self.request, secret)):
-                    print(body)
+                    logging.info(body)
                     streamId = body['event']['id']
                     # check if already seen this stream id
                     # indicates duplicate notification
