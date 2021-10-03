@@ -54,6 +54,26 @@ class DatabaseManager:
             if result:
                 return result[0]
             return None
+            
+    def getActiveSubscription(self, subId):
+        self.maybeReconnect()
+        query = "SELECT subscriptionId, streamerId, subSecret FROM activeSub WHERE subscriptionId = %s" % str(subId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            return None
+    
+    def findActiveSubscription(self, streamerId):
+        self.maybeReconnect()
+        query = "SELECT subscriptionId, streamerId, subSecret FROM activeSub WHERE streamerId = %s" % str(streamerId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            return None
 
     def streamerExists(self, streamerId):
         self.maybeReconnect()
@@ -62,30 +82,6 @@ class DatabaseManager:
             cursor.execute(query)
             result = cursor.fetchone()
             return result[0]
-
-    def getLastStreamId(self, streamerId):
-        self.maybeReconnect()
-        query = "SELECT streamId FROM lastLive WHERE streamerId = %s" % str(streamerId)
-        with self.connection.cursor() as cursor:
-            cursor.execute(query)
-            result = cursor.fetchone()
-            if result:
-                return result[0]
-            return None
-
-    def setLastStreamId(self, streamerId, streamId):
-        self.maybeReconnect()
-        query = "UPDATE lastLive SET streamId = %s WHERE streamerId = %s" % (str(streamId), str(streamerId))
-        with self.connection.cursor() as cursor:
-            cursor.execute(query)
-            self.connection.commit()
-
-    def addLastStreamId(self, streamerId, streamId):
-        self.maybeReconnect()
-        query = "INSERT INTO lastLive (streamerId, streamId) VALUES (%s, %s)" % (str(streamerId), str(streamId))
-        with self.connection.cursor() as cursor:
-            cursor.execute(query)
-            self.connection.commit()
     
     def delSubscription(self, streamerId, guildId):
         self.maybeReconnect()

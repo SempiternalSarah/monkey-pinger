@@ -34,16 +34,40 @@ globalMods = db.getGlobalMods()
 
 # webserver class that will receive and handle http requests
 class listener(tornado.web.RequestHandler):
-    # post requests - notifications received
+    # post requests - notifications received or subscription confirmations
     async def post(self):
-        print("RECEIVED!!!!1")
-        # check signature
-        sig = self.request.headers.get('X-Hub-Signature')
-        if (sig):
-            expectedSig = hmac.new(twitchSecret.encode('utf-8'), msg=self.request.body, digestmod=hashlib.sha256).hexdigest()
-            if ("sha256=" + expectedSig != sig):
-                logging.info("incorrect notification signature!")
-                return
+        # subscription confirmation
+        if (self.request.headers.get('Twitch-Eventsub-Message-Type') == 'webhook_callback_verification'):
+            # convert body to dictionary
+            body = tornado.escape.json_decode(self.request.body)
+            for pd, secret in pendingSubs:
+                if (pd['id'] != body['subscription']['id'] or pd['condition']['broadcaster_user_id'] != body['subscription']['condition']['broadcaster_user_id']):
+                    continue
+                # found the matching subscription
+                # check signature
+                sig = self.request.headers.get('Twitch-Eventsub-Message-Signature')
+                hmcMsg = self.request.headers.get('Twitch-Eventsub-Message-Id').encode('utf-8') + self.request.headers.get('Twitch-Eventsub-Message-Timestamp').encode('utf-8') + self.request.body
+                if (sig):
+                    expectedSig = hmac.new(secret.encode('utf-8'), msg=hmcMsg, digestmod=hashlib.sha256).hexdigest()
+                    print(sig, expectedSig)
+                    if ("sha256=" + expectedSig != sig):
+                        logging.info("incorrect notification signature!")
+                        return
+                else:
+                    logging.info("notification unsigned!")
+                    return
+                # respond to the request
+                self.write(body['challenge'])
+                pendingSubs.remove((pd, secret))
+            return
+
+        elif(self.request.headers.get('Twitch-Eventsub-Message-Type') == 'notification'):
+            # convert body to dictionary
+            body = tornado.escape.json_decode(self.request.body)
+            if (body['type'] = ['stream.online'])
+            userId = body['condition']['broadcaster_user_id'])
+            # send pings
+            await sendPings(db.getStreamerSubs(userId))
         else:
             logging.info("notification unsigned!")
             return
@@ -69,20 +93,6 @@ class listener(tornado.web.RequestHandler):
             # send pings
             await sendPings(db.getStreamerSubs(userId))
 
-    # get requests - should only see when registering
-    def get(self):
-        print("RECEIVED!!!!1 get")
-        # check that we requested this
-        topic = self.get_argument('hub.topic')
-        if (not topic or topic not in pendingSubs):
-            return
-        # indicate we have received confirmation for this topic
-        pendingSubs.remove(topic)
-        # extract challenge code to send in response
-        confirm = self.get_argument('hub.challenge')
-        logging.info("Successfully registered")
-        self.write(confirm)
-
 # streamer name
 streamer = os.getenv("STREAMER")
 
@@ -98,9 +108,6 @@ defaultMessage = os.getenv("DEFAULT_LIVE_MESSAGE")
 
 # variable for web server
 app = tornado.web.Application([(r"/", listener)])
-
-# address for web server
-ip = None
 
 # init discord client and twitch connection
 client = discord.Client()
@@ -140,36 +147,37 @@ def authAndRegisterTwitch(streamers):
         req = requests.post(authurl)
         twitchToken = req.json()['access_token']
 
-    # load external IP (to use as callback for twitch webhook)
-    ip = requests.get('https://api.ipify.org').text
-
     for streamer in streamers:
         # register for stream notifications with twitch webhook
         # these ones do not expire (check every day just in case?)
-        letters = string.ascii_lowercase.join(string.ascii_uppercase).join(string.digits)
-        subSecret = ''.join(random.choice(letters for i in range(20)))
-        print(subSecret)
+        letters = string.ascii_lowercase + string.ascii_uppercase + string.digits
+        subSecret = ''
+        for i in range(20):
+            subSecret += random.choice(letters)
+
         webhookurl = "https://api.twitch.tv/helix/eventsub/subscriptions"
         payload = {
-            "type": "stream.live",
+            "type": "stream.online",
             "version": "1",
             "condition": {
-                "broadcaster_user_id": "12826"
+                "broadcaster_user_id": streamer
             },
             "transport": {
                 "method": "webhook",
-                "callback": ip,
-                "secret": secret,
+                "callback": "https://ahsarah.com:443",
+                "secret": subSecret,
             }
         }
 
         header = {"Content-Type":"application/json", "Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
 
-        # save payload pending confirmation from Twitch
-        pendingSubs.append(payload)
-
         # send notification registration request
         req = requests.post(webhookurl, headers=header, json = payload)
+
+
+        # save request pending confirmation from Twitch
+        if(req.ok):
+            pendingSubs.append((req.json()['data'][0], subSecret))
 
 # returns privilege level of user
 def getPrivilege(user, channel):
@@ -202,6 +210,7 @@ async def on_message(message):
     # show streamers available on the server
     if message.content.startswith("!streamers"):
         streamers = db.getAllSubscriptions(message.guild.id)
+        print(streamers)
         if len(streamers) == 0:
             await message.channel.send("No stream notifications found on this server")
             return
@@ -329,21 +338,19 @@ async def on_message(message):
     elif message.content.startswith("!subs"):
         if(getPrivilege(message.author, message.channel) < 9):
             return
-        url = "https://api.twitch.tv/helix/webhooks/subscriptions"
+        url = "https://api.twitch.tv/helix/eventsub/subscriptions"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         subs = requests.get(url, headers=header).json()['data']
         userIds = []
         # parse each subscription and add twitch user ID to the list
         for sub in subs:
             print(sub)
-            # only list subs from THIS server (address and port number)
-            if (ip not in sub['callback'] or port not in sub['callback']):
-                continue
             # check that this is a streamer subscription
-            if ('https://api.twitch.tv/helix/streams?user_id' in sub['topic']):
+            if (sub['type'] == 'stream.online'):
                 # parse topic for the user ID
-                idx = sub['topic'].rindex('user_id=') + len('user_id=') 
-                userIds.append(int(sub['topic'][idx:]))
+                uid = sub['condition']['broadcaster_user_id']
+                if (sub['status'] == "enabled"):
+                    userIds.append(int(uid))
         # get user objects from IDs
         users = helix_api.users(userIds)
         userNames = [user.display_name for user in users]
@@ -359,7 +366,7 @@ async def on_message(message):
     elif message.content.startswith("!clearsubs"):
         if(getPrivilege(message.author, message.channel) < 9):
             return
-        url = "https://api.twitch.tv/helix/webhooks/subscriptions"
+        url = "https://api.twitch.tv/helix/eventsub/subscriptions"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         subs = requests.get(url, headers=header).json()['data']
         await clearSubs(subs)
@@ -383,24 +390,16 @@ async def on_message(message):
 
 # removes all subscriptions
 async def clearSubs(subs):
-    webhookurl = "https://api.twitch.tv/helix/webhooks/hub"
+    webhookurl = "https://api.twitch.tv/helix/eventsub/subscriptions"
     for sub in subs:
-        # only clear subs from THIS server (IP and port number)
-        if (ip not in sub['callback'] or port not in sub['callback']):
-            continue
-        # register for stream notifications with twitch webhook
-        # lease set for 25 hours - will renew every 24
-        payload = {"hub.mode":"unsubscribe",
-            "hub.topic": sub['topic'],
-            "hub.callback": sub['callback'],
-            "hub.lease_seconds": 0,
-            "hub.secret": twitchSecret
-        }
-        # mark we are waiting for confirmation
-        pendingSubs.append(payload['hub.topic'])
+        finalUrl = webhookurl + "?id=" + sub['id']
         # build headers and send request
-        header = {"Content-Type":"application/json", "Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
-        requests.post(webhookurl, headers=header, json=payload)
+        header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
+        temp = requests.delete(finalUrl, headers=header)
+        if (not temp.ok):
+            print(sub['id'])
+            print(temp.json())
+        
 
 
 
@@ -437,7 +436,7 @@ async def registerDaily():
 client.loop.create_task(registerDaily())
 
 # start listening to twitch API
-app.listen(int(port), ssl_options={'certfile': 'host.cert', 'keyfile': 'host.key'})
+app.listen(int(port), xheaders=True)
 
 # hand control over to the client
 client.run(os.getenv("DISCORD_TOKEN"))
