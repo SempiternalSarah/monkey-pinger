@@ -32,6 +32,21 @@ db = databaseManager.DatabaseManager()
 # load global moderators
 globalMods = db.getGlobalMods()
 
+# check signature
+def checkSig(request, secret):
+    # check signature
+    sig = request.headers.get('Twitch-Eventsub-Message-Signature')
+    if (sig):
+        hmcMsg = request.headers.get('Twitch-Eventsub-Message-Id').encode('utf-8') + request.headers.get('Twitch-Eventsub-Message-Timestamp').encode('utf-8') + request.body
+        expectedSig = hmac.new(secret.encode('utf-8'), msg=hmcMsg, digestmod=hashlib.sha256).hexdigest()
+        if ("sha256=" + expectedSig != sig):
+            logging.info("incorrect notification signature!")
+            return False
+    else:
+        logging.info("notification unsigned!")
+        return False
+    return True
+
 # webserver class that will receive and handle http requests
 class listener(tornado.web.RequestHandler):
     # post requests - notifications received or subscription confirmations
@@ -43,58 +58,49 @@ class listener(tornado.web.RequestHandler):
             for pd, secret in pendingSubs:
                 if (pd['id'] != body['subscription']['id'] or pd['condition']['broadcaster_user_id'] != body['subscription']['condition']['broadcaster_user_id']):
                     continue
+
                 # found the matching subscription
                 # check signature
-                sig = self.request.headers.get('Twitch-Eventsub-Message-Signature')
-                hmcMsg = self.request.headers.get('Twitch-Eventsub-Message-Id').encode('utf-8') + self.request.headers.get('Twitch-Eventsub-Message-Timestamp').encode('utf-8') + self.request.body
-                if (sig):
-                    expectedSig = hmac.new(secret.encode('utf-8'), msg=hmcMsg, digestmod=hashlib.sha256).hexdigest()
-                    print(sig, expectedSig)
-                    if ("sha256=" + expectedSig != sig):
-                        logging.info("incorrect notification signature!")
-                        return
-                else:
-                    logging.info("notification unsigned!")
-                    return
-                # respond to the request
-                self.write(body['challenge'])
-                pendingSubs.remove((pd, secret))
+                if (checkSig(self.request, secret)):   
+                    
+                    # respond to the request
+                    self.write(body['challenge'])
+                    logging.info("Sub activated %s" % pd['condition']['broadcaster_user_id'])
+                    # remove from pending subs
+                    pendingSubs.remove((pd, secret))
+                    # add to active sub table
+                    if (db.activeStreamerSubExists(pd['condition']['broadcaster_user_id'])):
+                        db.editActiveSubscription(pd['id'], pd['condition']['broadcaster_user_id'], secret)
+                    else:
+                        db.addActiveSubscription(pd['id'], pd['condition']['broadcaster_user_id'], secret)
             return
 
         elif(self.request.headers.get('Twitch-Eventsub-Message-Type') == 'notification'):
             # convert body to dictionary
             body = tornado.escape.json_decode(self.request.body)
-            if (body['type'] = ['stream.online'])
-            userId = body['condition']['broadcaster_user_id'])
-            # send pings
-            await sendPings(db.getStreamerSubs(userId))
-        else:
-            logging.info("notification unsigned!")
-            return
 
-        # convert body to dictionary
-        body = tornado.escape.json_decode(self.request.body)
-        # check if live notification
-        if (body and body['data'] and body['data'][0]['type'] == "live"):
-            logging.info("live notification")
-            userId = body['data'][0]['user_id']
-            streamId = body['data'][0]['id']
-            # check if already seen this stream id
-            # indicates title change, etc
-            lastStream = db.getLastStreamId(userId)
-            if (lastStream == str(streamId)):
-                logging.info("stream update for streamer %s - not new live" % userId)
+            sub = body['subscription']
+            if (sub['type'] == 'stream.online'):
+                userId = sub['condition']['broadcaster_user_id']
+                secret = db.findActiveSubscription(userId)[2]
+                # check signature
+                if (checkSig(self.request, secret)):
+                    print(body)
+                    streamId = body['event']['id']
+                    # check if already seen this stream id
+                    # indicates duplicate notification
+                    lastStream = db.getLastStreamId(userId)
+                    if (lastStream == str(streamId)):
+                        logging.info("duplicate notification for streamer %s - not new live" % userId)
+                        return
+                    # mark this as last stream seen live
+                    if (lastStream == None):
+                        db.addLastStreamId(userId, streamId)
+                    else:
+                        db.setLastStreamId(userId, streamId)
+                    # send pings
+                    await sendPings(db.getStreamerSubs(userId))
                 return
-            # mark this as last stream seen live
-            if (lastStream == None):
-                db.addLastStreamId(userId, streamId)
-            else:
-                db.setLastStreamId(userId, streamId)
-            # send pings
-            await sendPings(db.getStreamerSubs(userId))
-
-# streamer name
-streamer = os.getenv("STREAMER")
 
 # twitch dev details
 twitchId = os.getenv("TWITCH_ID")
@@ -120,32 +126,15 @@ twitchToken = None
 # store pending twitch webhook subscriptions
 pendingSubs = []
 
-# checks token with twitch, renews if necessary
-# then registers for notifications for each streamer
-def authAndRegisterTwitch(streamers):
+# store ACTIVE (with the API) twitch webhook subscriptions
+# key is streamer id, value is subscription id
+activeSubs = []
+
+# registers for notifications for each streamer in streamers
+def registerSubs(streamers):
     # exit if list empty
     if(len(streamers) == 0):
         return
-    global twitchToken, ip
-    # URL to check token
-    if (twitchToken != None):
-        valurl = "https://id.twitch.tv/oauth2/validate"
-        header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
-        req = requests.get(valurl, headers=header).json()
-        expiry = 0
-        if ('expires_in' in req):
-            expiry = req['expires_in']
-        # mark for renewal if expiry less than an hour away
-        if (expiry < 3600):
-            twitchToken = None
-    # renew token
-    if (twitchToken == None):
-        # build URL to receive token
-        authurl = "https://id.twitch.tv/oauth2/token?client_id=" + twitchId + "&client_secret=" + twitchSecret + "&grant_type=client_credentials"
-        
-        # extract response
-        req = requests.post(authurl)
-        twitchToken = req.json()['access_token']
 
     for streamer in streamers:
         # register for stream notifications with twitch webhook
@@ -186,6 +175,13 @@ def getPrivilege(user, channel):
     if(user.permissions_in(channel).manage_guild):
         return 8
     return 0
+
+# gets full list of subs from twitch
+def getTwitchSubs():
+    url = "https://api.twitch.tv/helix/eventsub/subscriptions"
+    header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
+    subs = requests.get(url, headers=header).json()['data']
+    return subs
     
 
 # called once discord client is connected
@@ -301,7 +297,7 @@ async def on_message(message):
         # check to see if this is a subscription to a new streamer
         if (not db.streamerExists(user.id)):
             # register for notifications for this streamer
-            authAndRegisterTwitch([user.id])
+            registerSubs([user.id])
         # add subscription to database
         db.addStreamerSub(models.discordTwitchSubscription.DiscordTwitchSubscription(user.id, message.guild.id, message.channel.id, newRole.id, defaultMessage))
         await message.channel.send("Notifications for streamer `%s` added in channel %s for role `%s`" % (user.display_name, message.channel.mention, newRole.name))
@@ -366,10 +362,9 @@ async def on_message(message):
     elif message.content.startswith("!clearsubs"):
         if(getPrivilege(message.author, message.channel) < 9):
             return
-        url = "https://api.twitch.tv/helix/eventsub/subscriptions"
-        header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
-        subs = requests.get(url, headers=header).json()['data']
+        subs = getTwitchSubs()
         await clearSubs(subs)
+        db.clearActiveSubscriptions()
 
     # add global moderator
     elif message.content.startswith("!addmod"):
@@ -388,10 +383,11 @@ async def on_message(message):
         await message.add_reaction("👍")
         
 
-# removes all subscriptions
+# removes all subscriptions in subs list
 async def clearSubs(subs):
     webhookurl = "https://api.twitch.tv/helix/eventsub/subscriptions"
     for sub in subs:
+        print(sub)
         finalUrl = webhookurl + "?id=" + sub['id']
         # build headers and send request
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
@@ -410,6 +406,7 @@ async def sendPings(subs: list):
         return
     # all will be about the same streamer
     streamer = helix_api.user(subs[0].streamerId)
+    logging.info(streamer.display_name + " has gone live, sending notifs")
     for sub in subs:
         # extract subscription information
         guild = client.get_guild(sub.guildId)
@@ -423,12 +420,62 @@ async def sendPings(subs: list):
         message = message.replace("$role", mention)
         await channel.send(message)
 
+# check Twitch token, renew if needed
+async def twitchAuth():
+    global twitchToken
+    # URL to check token
+    if (twitchToken != None):
+        valurl = "https://id.twitch.tv/oauth2/validate"
+        header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
+        req = requests.get(valurl, headers=header).json()
+        expiry = 0
+        if ('expires_in' in req):
+            expiry = req['expires_in']
+        # mark for renewal if expires today
+        if (expiry < 90000):
+            twitchToken = None
+    # renew token
+    if (twitchToken == None):
+        # build URL to receive token
+        authurl = "https://id.twitch.tv/oauth2/token?client_id=" + twitchId + "&client_secret=" + twitchSecret + "&grant_type=client_credentials"
+        
+        # extract response
+        req = requests.post(authurl)
+        twitchToken = req.json()['access_token']
+
+# clear subscriptions that aren't live (registered with Twitch but non-functional)
+async def clearInvalidSubs(subs):
+    invalidSubs = list(filter(lambda sub: sub['status'] != "enabled", subs))
+    logging.info("%i INVALID SUBS" % (len(invalidSubs)))
+    await clearSubs(invalidSubs)
+
+# get known subscriptions that need to be re-registered with Twitch
+def getInactiveSubs(subs):
+    # all streamers for which we need notifications
+    neededSubs = db.getAllStreamers()
+
+    # live subscriptions on twitch
+    activeSubs = filter(lambda sub: sub['status'] == "enabled", subs)
+    activeSubs = list(map(lambda sub: sub['condition']['broadcaster_user_id'], activeSubs))
+
+    logging.info("%i ACTIVE SUBS: %s" % (len(activeSubs), activeSubs))
+    toRenew = []
+    # find lapsed subs
+    for sub in neededSubs:
+        if sub not in activeSubs:
+            print(sub)
+            toRenew.append(sub)
+    return toRenew
+
 # job added to the discord client's event loop
-# registers for twitch webhook notifications every 24 hours
+# cleans up twitch api registrations every 24 hours
 async def registerDaily():
     while(True):
         logging.info("Registering...")
-        authAndRegisterTwitch(db.getAllStreamers())
+        await twitchAuth()
+        subs = getTwitchSubs()
+        await clearInvalidSubs(subs)
+        registerSubs(getInactiveSubs(subs))
         # sleep for 24 hours before registering again
         await asyncio.sleep(86400)
         

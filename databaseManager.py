@@ -54,6 +54,20 @@ class DatabaseManager:
             if result:
                 return result[0]
             return None
+
+    def addActiveSubscription(self, subId, streamerId, subSecret):
+        self.maybeReconnect()
+        query = "INSERT INTO activeSub (subscriptionId, streamerId, subSecret) VALUES (\"%s\", %i, \"%s\")" % (subId, int(streamerId), subSecret)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()
+
+    def editActiveSubscription(self, subId, streamerId, subSecret):
+        self.maybeReconnect()
+        query = "UPDATE activeSub SET subscriptionId = \"%s\", subSecret = \"%s\" WHERE streamerId = \"%s\"" % (str(subId), str(subSecret), str(streamerId))
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()
             
     def getActiveSubscription(self, subId):
         self.maybeReconnect()
@@ -61,8 +75,9 @@ class DatabaseManager:
         with self.connection.cursor() as cursor:
             cursor.execute(query)
             result = cursor.fetchone()
+            print(result)
             if result:
-                return result[0]
+                return result
             return None
     
     def findActiveSubscription(self, streamerId):
@@ -72,8 +87,56 @@ class DatabaseManager:
             cursor.execute(query)
             result = cursor.fetchone()
             if result:
+                return result
+            return None
+    
+    def getAllActiveSubscriptions(self):
+        self.maybeReconnect()
+        query = "SELECT DISTINCT streamerId FROM activeSub"
+        toReturn = []
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            for sub in cursor.fetchall():
+                toReturn.append(sub)
+            return toReturn
+    
+    def clearActiveSubscriptions(self):
+        self.maybeReconnect()
+        query = "TRUNCATE TABLE activeSub"
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+
+    def getLastStreamId(self, streamerId):
+        self.maybeReconnect()
+        query = "SELECT streamId FROM lastLive WHERE streamerId = %s" % str(streamerId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.fetchone()
+            if result:
                 return result[0]
             return None
+
+    def setLastStreamId(self, streamerId, streamId):
+        self.maybeReconnect()
+        query = "UPDATE lastLive SET streamId = %s WHERE streamerId = %s" % (str(streamId), str(streamerId))
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()
+
+    def addLastStreamId(self, streamerId, streamId):
+        self.maybeReconnect()
+        query = "INSERT INTO lastLive (streamerId, streamId) VALUES (%s, %s)" % (str(streamerId), str(streamId))
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()
+
+    def activeStreamerSubExists(self, streamerId):
+        self.maybeReconnect()
+        query = "SELECT COUNT(1) FROM activeSub WHERE streamerId = %s" % str(streamerId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.fetchone()
+            return result[0]
 
     def streamerExists(self, streamerId):
         self.maybeReconnect()
