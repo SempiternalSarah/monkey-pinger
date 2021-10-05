@@ -340,8 +340,8 @@ async def on_message(message):
         subs = requests.get(url, headers=header).json()['data']
         userIds = []
         # parse each subscription and add twitch user ID to the list
+        logging.info("ACTIVE TWITCH SUBS:")
         for sub in subs:
-            logging.info("ACTIVE TWITCH SUBS:")
             logging.info(sub)
             # check that this is a streamer subscription
             if (sub['type'] == 'stream.online'):
