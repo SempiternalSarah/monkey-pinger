@@ -23,7 +23,8 @@ dotenv.load_dotenv(override=True)
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level = logging.INFO,
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    filename="LOG.out",
 )
 
 # connect to database
@@ -206,7 +207,7 @@ async def on_message(message):
     # show streamers available on the server
     if message.content.startswith("!streamers"):
         streamers = db.getAllSubscriptions(message.guild.id)
-        print(streamers)
+        logging.info(streamers)
         if len(streamers) == 0:
             await message.channel.send("No stream notifications found on this server")
             return
@@ -340,7 +341,8 @@ async def on_message(message):
         userIds = []
         # parse each subscription and add twitch user ID to the list
         for sub in subs:
-            print(sub)
+            logging.info("ACTIVE TWITCH SUBS:")
+            logging.info(sub)
             # check that this is a streamer subscription
             if (sub['type'] == 'stream.online'):
                 # parse topic for the user ID
@@ -387,14 +389,14 @@ async def on_message(message):
 async def clearSubs(subs):
     webhookurl = "https://api.twitch.tv/helix/eventsub/subscriptions"
     for sub in subs:
-        print(sub)
+        logging.info(sub)
         finalUrl = webhookurl + "?id=" + sub['id']
         # build headers and send request
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         temp = requests.delete(finalUrl, headers=header)
         if (not temp.ok):
-            print(sub['id'])
-            print(temp.json())
+            logging.error("ERROR DELETEDING SUB: " + sub['id'])
+            logging.error(temp.json())
         
 
 
@@ -463,7 +465,7 @@ def getInactiveSubs(subs):
     # find lapsed subs
     for sub in neededSubs:
         if sub not in activeSubs:
-            print(sub)
+            logging.info(sub)
             toRenew.append(sub)
     return toRenew
 

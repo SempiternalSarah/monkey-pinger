@@ -5,3 +5,4 @@ yoyo.ini
 log.txt
 host.cert
 host.key
+*.out
