@@ -451,6 +451,21 @@ async def clearInvalidSubs(subs):
     logging.info("%i INVALID SUBS" % (len(invalidSubs)))
     await clearSubs(invalidSubs)
 
+# clear subscriptions that aren't being used (registered with Twitch but no Discord channels want notifs)
+async def clearUnwantedSubs(subs):
+    # all streamers for which we need notifications
+    neededSubs = db.getAllStreamers()
+
+    toRemove = []
+    # find obsolete subs
+    for sub in subs:
+        if sub['condition']['broadcaster_user_id'] not in neededSubs:
+            toRemove.append(sub)
+    logging.info("OBSOLETE SUBS:::::")
+    logging.info(toRemove)
+    # de-register obsolete subs with twitch
+    await clearSubs(toRemove)
+
 # get known subscriptions that need to be re-registered with Twitch
 def getInactiveSubs(subs):
     # all streamers for which we need notifications
@@ -475,8 +490,13 @@ async def registerDaily():
     while(True):
         logging.info("Registering...")
         await twitchAuth()
+        # get all twitch subscriptions
         subs = getTwitchSubs()
+        # unsubscribe from obsolete subscriptions (no longer being pushed to any discords)
+        await clearUnwantedSubs(subs)
+        # clear non-live twitch subscriptions (invalid for some reason - expired or revoked etc)
         await clearInvalidSubs(subs)
+        # renew non-live but needed subs
         registerSubs(getInactiveSubs(subs))
         # sleep for 24 hours before registering again
         await asyncio.sleep(86400)
