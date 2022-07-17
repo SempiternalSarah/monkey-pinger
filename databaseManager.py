@@ -179,6 +179,13 @@ class DatabaseManager:
             for mod in cursor.fetchall():
                 toReturn.append(mod[0])
             return toReturn
+    
+    def setPingMessage(self, guildId, streamerId, message):
+        self.maybeReconnect()
+        query = "UPDATE discordTwitchSubscriptions SET message = %s WHERE guildId = %s AND streamerId = %s" % (guildId, streamerId)
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            self.connection.commit()
 
     def addGlobalMod(self, userId):
         self.maybeReconnect()

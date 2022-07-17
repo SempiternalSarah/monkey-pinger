@@ -278,19 +278,20 @@ async def on_message(message):
         # 3rd argument is role name/id
         if len(fields) >= 3:
             newRole = None
-            # find role by id
-            if (fields[2].isdigit()):
-                newRole = discord.utils.get(message.guild.roles, id=int(fields[2]))
-            # not valid id - find by name
-            if not newRole:
-                name = ""
-                for x in range(2, len(fields)):
-                    name += fields[x]
-                    name += " "
-                newRole = discord.utils.get(message.guild.roles, name=name)
-            # not valid name - make new role with matching name
-            if not newRole:
-                newRole = await message.guild.create_role(name=name, mentionable=True)
+            if (fields[2].lower() != 'none'):  
+                # find role by id
+                if (fields[2].isdigit()):
+                    newRole = discord.utils.get(message.guild.roles, id=int(fields[2]))
+                # not valid id - find by name
+                if not newRole:
+                    name = ""
+                    for x in range(2, len(fields)):
+                        name += fields[x]
+                        name += " "
+                    newRole = discord.utils.get(message.guild.roles, name=name)
+                # not valid name - make new role with matching name
+                if not newRole:
+                    newRole = await message.guild.create_role(name=name, mentionable=True)
         # no role passed - create new role with default name
         else:   
             newRole = await message.guild.create_role(name=user.display_name+" pings", mentionable=True)
@@ -301,7 +302,19 @@ async def on_message(message):
             registerSubs([user.id])
         # add subscription to database
         db.addStreamerSub(models.discordTwitchSubscription.DiscordTwitchSubscription(user.id, message.guild.id, message.channel.id, newRole.id, defaultMessage))
-        await message.channel.send("Notifications for streamer `%s` added in channel %s for role `%s`" % (user.display_name, message.channel.mention, newRole.name))
+        if newRole:
+            await message.channel.send("Notifications for streamer `%s` added in channel %s for role `%s`" % (user.display_name, message.channel.mention, newRole.name))
+        else:
+            await message.channel.send("Notifications for streamer `%s` added in channel %s" % (user.display_name, message.channel.mention, newRole.name))
+
+    # update going live message
+    elif message.content.startswith("!changemessage"):
+        if(getPrivilege(message.author, message.channel) < 5):
+            return
+        fields = message.content.split()
+        if (len(fields) < 2):
+            await message.channel.send("Command !changemessage requires a streamer and a message as arguments")
+            return
 
     # remove streamer notifications from the guild
     elif message.content.startswith("!removenotifs"):
