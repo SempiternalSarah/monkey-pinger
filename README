@@ -1,6 +1,8 @@
 Bot created to ping users in Discord when the streamer goes live.
 
 Requirements: 
+    mysql server
+    nginx
     Twitch Python (pip install twitch-python)
     Discord Python (pip install discord.py)
     Python dotenv (pip install python-dotenv)
