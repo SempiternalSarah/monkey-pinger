@@ -9,7 +9,7 @@ class DatabaseManager:
         host="localhost",
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASS"),
-        database="discordtwitchbot")
+        database=os.getenv("DB_TABLE"))
 
     def maybeReconnect(self):
         if self.connection.is_connected():

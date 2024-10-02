@@ -25,7 +25,7 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level = logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S',
-    filename="LOG.out",
+    filename=os.getenv("LOG_LOCATION"),
 )
 
 # connect to database
@@ -160,7 +160,7 @@ def registerSubs(streamers):
             },
             "transport": {
                 "method": "webhook",
-                "callback": "https://ahsarah.com/monkeypinger",
+                "callback": os.getenv("CALLBACK_URL"),
                 "secret": subSecret,
             }
         }
