@@ -1,6 +1,7 @@
 import dotenv
 import twitch
 import discord
+from discord.ext import tasks
 import asyncio
 import os
 import tornado.web
@@ -52,6 +53,7 @@ def checkSig(request, secret):
 class listener(tornado.web.RequestHandler):
     # post requests - notifications received or subscription confirmations
     async def post(self):
+        print(self.request)
         # subscription confirmation
         if (self.request.headers.get('Twitch-Eventsub-Message-Type') == 'webhook_callback_verification'):
             # convert body to dictionary
@@ -102,6 +104,8 @@ class listener(tornado.web.RequestHandler):
                     # send pings
                     await sendPings(db.getStreamerSubs(userId))
                 return
+    async def get(self):
+        print("GET REQUSST RECEIVED!!")
 
 # twitch dev details
 twitchId = os.getenv("TWITCH_ID")
@@ -117,7 +121,9 @@ defaultMessage = os.getenv("DEFAULT_LIVE_MESSAGE")
 app = tornado.web.Application([(r"/", listener)])
 
 # init discord client and twitch connection
-client = discord.Client()
+intents = discord.Intents.default()
+intents.message_content = True
+client = discord.Client(intents=intents)
 helix_api = twitch.Helix(twitchId, twitchSecret)
 
 # store twitch token once obtained
@@ -154,7 +160,7 @@ def registerSubs(streamers):
             },
             "transport": {
                 "method": "webhook",
-                "callback": "https://ahsarah.com:443",
+                "callback": "https://ahsarah.com/monkeypinger",
                 "secret": subSecret,
             }
         }
@@ -173,7 +179,7 @@ def registerSubs(streamers):
 def getPrivilege(user, channel):
     if str(user.id) in globalMods:
         return 9
-    if(user.permissions_in(channel).manage_guild):
+    if channel.permissions_for(user).manage_guild:
         return 8
     return 0
 
@@ -182,6 +188,7 @@ def getTwitchSubs():
     url = "https://api.twitch.tv/helix/eventsub/subscriptions"
     header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
     subs = requests.get(url, headers=header).json()['data']
+    print(subs)
     return subs
     
 
@@ -192,6 +199,7 @@ async def on_ready():
     logging.info("Discord client connected")
     # set discord bot status
     game = discord.Game("!pingme {streamername} \n !pingmenot {streamername}")
+    registerDaily.start()
     await client.change_presence(activity=game, status=discord.Status.online)
 
 # called when bot is removed from guild
@@ -351,6 +359,7 @@ async def on_message(message):
         url = "https://api.twitch.tv/helix/eventsub/subscriptions"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         subs = requests.get(url, headers=header).json()['data']
+        print(subs)
         userIds = []
         # parse each subscription and add twitch user ID to the list
         logging.info("ACTIVE TWITCH SUBS:")
@@ -360,10 +369,13 @@ async def on_message(message):
             if (sub['type'] == 'stream.online'):
                 # parse topic for the user ID
                 uid = sub['condition']['broadcaster_user_id']
+                print(uid)
                 if (sub['status'] == "enabled"):
                     userIds.append(int(uid))
         # get user objects from IDs
+        print(userIds)
         users = helix_api.users(userIds)
+        print(users)
         userNames = [user.display_name for user in users]
         userNames.sort(key=str.casefold)
         # build message including names of all streamers
@@ -408,7 +420,7 @@ async def clearSubs(subs):
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         temp = requests.delete(finalUrl, headers=header)
         if (not temp.ok):
-            logging.error("ERROR DELETEDING SUB: " + sub['id'])
+            logging.error("ERROR DELETING SUB: " + sub['id'])
             logging.error(temp.json())
         
 
@@ -499,27 +511,24 @@ def getInactiveSubs(subs):
 
 # job added to the discord client's event loop
 # cleans up twitch api registrations every 24 hours
+@tasks.loop(hours=24)
 async def registerDaily():
-    while(True):
-        logging.info("Registering...")
-        await twitchAuth()
-        # get all twitch subscriptions
-        subs = getTwitchSubs()
-        # unsubscribe from obsolete subscriptions (no longer being pushed to any discords)
-        await clearUnwantedSubs(subs)
-        # clear non-live twitch subscriptions (invalid for some reason - expired or revoked etc)
-        await clearInvalidSubs(subs)
-        # renew non-live but needed subs
-        registerSubs(getInactiveSubs(subs))
-        # sleep for 24 hours before registering again
-        await asyncio.sleep(86400)
-        
-# add daily registration task to client
-client.loop.create_task(registerDaily())
+    logging.info("Registering...")
+    await twitchAuth()
+    # get all twitch subscriptions
+    subs = getTwitchSubs()
+    # unsubscribe from obsolete subscriptions (no longer being pushed to any discords)
+    await clearUnwantedSubs(subs)
+    # clear non-live twitch subscriptions (invalid for some reason - expired or revoked etc)
+    await clearInvalidSubs(subs)
+    # renew non-live but needed subs
+    registerSubs(getInactiveSubs(subs))
 
 # start listening to twitch API
 app.listen(int(port), xheaders=True)
 
+loop = asyncio.get_event_loop()
+asyncio.ensure_future(client.start(os.getenv("DISCORD_TOKEN")), loop=loop)
 # hand control over to the client
-client.run(os.getenv("DISCORD_TOKEN"))
+loop.run_forever()
 
