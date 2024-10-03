@@ -53,7 +53,6 @@ def checkSig(request, secret):
 class listener(tornado.web.RequestHandler):
     # post requests - notifications received or subscription confirmations
     async def post(self):
-        print(self.request)
         # subscription confirmation
         if (self.request.headers.get('Twitch-Eventsub-Message-Type') == 'webhook_callback_verification'):
             # convert body to dictionary
@@ -104,8 +103,6 @@ class listener(tornado.web.RequestHandler):
                     # send pings
                     await sendPings(db.getStreamerSubs(userId))
                 return
-    async def get(self):
-        print("GET REQUSST RECEIVED!!")
 
 # twitch dev details
 twitchId = os.getenv("TWITCH_ID")
@@ -188,7 +185,7 @@ def getTwitchSubs():
     url = "https://api.twitch.tv/helix/eventsub/subscriptions"
     header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
     subs = requests.get(url, headers=header).json()['data']
-    print(subs)
+    logging.info(subs)
     return subs
     
 
@@ -206,7 +203,7 @@ async def on_ready():
 @client.event
 async def on_guild_remove(guild):
     # remove subscriptions for that guild from the database
-    # no need to manually remove twitch subscriptions - will expire within a day
+    # no need to manually remove twitch subscriptions - will be removed as a daily task
     db.delAllSubscriptions(guild.id)
 
 # called every message - only reacts to the commands
@@ -359,7 +356,6 @@ async def on_message(message):
         url = "https://api.twitch.tv/helix/eventsub/subscriptions"
         header = {"Client-ID": twitchId, 'Authorization' : 'Bearer ' + twitchToken}
         subs = requests.get(url, headers=header).json()['data']
-        print(subs)
         userIds = []
         # parse each subscription and add twitch user ID to the list
         logging.info("ACTIVE TWITCH SUBS:")
@@ -369,13 +365,10 @@ async def on_message(message):
             if (sub['type'] == 'stream.online'):
                 # parse topic for the user ID
                 uid = sub['condition']['broadcaster_user_id']
-                print(uid)
                 if (sub['status'] == "enabled"):
                     userIds.append(int(uid))
         # get user objects from IDs
-        print(userIds)
         users = helix_api.users(userIds)
-        print(users)
         userNames = [user.display_name for user in users]
         userNames.sort(key=str.casefold)
         # build message including names of all streamers
